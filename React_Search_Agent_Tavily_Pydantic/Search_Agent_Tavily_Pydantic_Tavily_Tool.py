@@ -10,13 +10,20 @@ from pydantic import BaseModel, Field
 from tavily import TavilyClient
 from langchain_tavily import TavilySearch
 
-from typing import Literal
+from typing import List, Literal
 
 load_dotenv()
 tavily=TavilyClient()
 
+class JobOffer(BaseModel):
+    job_description: str = Field(description="A brief summary of this specific job")
+    url: str = Field(description="The direct link to this specific job offer")
+    experience_level: str = Field(default="Not_Specified", description="Required experience (e.g., Junior, Senior)")
+    notable_tools: List[str] = Field(default="Not_Specified", description="List of specific tools like Python, PyTorch, etc.")
+
 class Ans_format(BaseModel):
-    answer: str = Field(description="The final answer to the user's question")
+    offers: List[JobOffer] = Field(description="A list of all unique job offers found")
+    
   
   
 
@@ -51,6 +58,8 @@ def main():
     tools=[TavilySearch()]
     agent=create_agent(model=llm, tools=tools, response_format=Ans_format)
     answer=agent.invoke({"messages": [HumanMessage(content="Search for AI engineer jobs in Athens, Greece. Return me a brief description of the jobs found in different paragraphs and the link to the offer.")]})
-    print(answer["structured_response"].answer)
+    for job in answer["structured_response"].offers:
+        print(f"Job: {job.job_description}")
+        print(f"Link: {job.url}")
 if __name__=="__main__":
     main()
