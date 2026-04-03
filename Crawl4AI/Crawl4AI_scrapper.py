@@ -117,12 +117,12 @@ async def crawl_web(urls: List[str]) -> List[Document]:
 def main():
     urls = [
         "https://privatedrafting.blogspot.com/2025/08/finding-success-sir-lewis-hamilton.html",
-        "https://medium.com/@zshariff70/langchain-simple-llm-chains-in-action-bda6950afc71",
-        "https://en.wikipedia.org/wiki/Formula_One",
+        #"https://medium.com/@zshariff70/langchain-simple-llm-chains-in-action-bda6950afc71",
+        #"https://en.wikipedia.org/wiki/Formula_One",
     ]
     docs = asyncio.run(crawl_web(urls))
     print(f"\nTotal chunks ready for Vector DB: {len(docs)}")
-   
+    print(docs)
 
 if __name__ == "__main__":
     main()
