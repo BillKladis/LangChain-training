@@ -13,13 +13,24 @@ class SupervisorDecision(BaseModel):
     reasoning: str
 
 def supervisor(state):
+    from query_memory_manager import load_query_memory, add_query
+
     messages = state["messages"]
     query = state["query"]
     iterations = state.get("iterations", 0)
+    rag_completed = state.get("rag_completed", False)
 
     if iterations >= 5:
         print("Max iterations reached, forcing END")
         return {"next": "END", "iterations": iterations + 1}
+
+    if rag_completed:
+        print("Supervisor → END: RAG already completed")
+        add_query(query)  # save only here, after RAG actually ran
+        return {"next": "END", "iterations": iterations + 1}
+
+    previous_queries = load_query_memory()
+    memory_context = f"Previously researched: {previous_queries}" if previous_queries else "No previous research."
 
     decision = llm.with_structured_output(SupervisorDecision).invoke([
         SystemMessage("""You are a supervisor managing two agents:
@@ -28,15 +39,22 @@ def supervisor(state):
         - END: the task is complete.
 
         Decision rules:
-        - If no research has been attempted yet → research
-        - If research was attempted but returned empty URLs or 0 chunks → research again
-        - If you see a message containing 'Crawled and stored' with chunks > 0 AND rag has NOT run yet → rag
-        - If rag has run and produced a final answer → END immediately
+        - If the query is covered by previously researched topics → rag directly, skip research
+        - If no relevant previous research exists → research first
+        - If research was attempted but 0 chunks stored → research again
+        - If you see 'Crawled and stored' in messages AND rag has not run yet → rag
+        - If rag has produced a final answer → END
 
-        CRITICAL: Only route to rag ONCE. After rag produces any answer, return END.
-        CRITICAL: Do NOT route to rag unless you see 'Crawled and stored' in the messages.
+        CRITICAL: Only call rag ONCE. After rag answers, return END.
         """),
-        HumanMessage(content=f"Query: {query}\n\nConversation so far:\n{messages}")
+        HumanMessage(content=f"""Query: {query}
+
+{memory_context}
+
+Conversation so far:
+{messages}
+
+What should we do next?""")
     ])
 
     print(f"Supervisor → {decision.next}: {decision.reasoning}")

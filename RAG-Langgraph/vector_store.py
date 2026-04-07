@@ -9,27 +9,17 @@ EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 COLLECTION_NAME = "Scrapping_for_RAG"
 QDRANT_URL = "http://localhost:6333"
 
+_embeddings = HuggingFaceEmbeddings(
+    model_name=EMBEDDING_MODEL,
+    model_kwargs={"device": "cpu"},
+    encode_kwargs={"normalize_embeddings": True}
+)
+_client = QdrantClient(url=QDRANT_URL)
 
-def get_embeddings():
-    return HuggingFaceEmbeddings(
-        model_name=EMBEDDING_MODEL,
-        model_kwargs={"device": "cpu"},
-        encode_kwargs={"normalize_embeddings": True}
-    )
-
-def get_vectorstore() -> QdrantVectorStore:
-    embeddings = get_embeddings()
-    client = QdrantClient(url=QDRANT_URL)
-    return QdrantVectorStore(
-        client=client,
-        collection_name=COLLECTION_NAME,
-        embedding=embeddings,
-    )
-
-def create_or_fetch_collection(client: QdrantClient, embedding_dim: int = 384):
-    col = [c.name for c in client.get_collections().collections]
+def create_or_fetch_collection(embedding_dim: int = 384):
+    col = [c.name for c in _client.get_collections().collections]
     if COLLECTION_NAME not in col:
-        client.create_collection(
+        _client.create_collection(
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=embedding_dim, distance=Distance.COSINE)
         )
@@ -37,11 +27,46 @@ def create_or_fetch_collection(client: QdrantClient, embedding_dim: int = 384):
     else:
         print(f"Using existing collection: {COLLECTION_NAME}")
 
+create_or_fetch_collection()
+
+def get_vectorstore() -> QdrantVectorStore:
+    return QdrantVectorStore(
+        client=_client,
+        collection_name=COLLECTION_NAME,
+        embedding=_embeddings,
+    )
+
+def get_crawled_urls() -> set:
+    try:
+        results = _client.scroll(
+            collection_name=COLLECTION_NAME,
+            with_payload=True,
+            limit=10000
+        )
+        urls = set()
+        for point in results[0]:
+            url = point.payload.get("metadata", {}).get("source_url")
+            if url:
+                urls.add(url)
+        return urls
+    except Exception:
+        return set()
+
 def store_documents(documents: List[Document]):
+    if not documents:
+        print("No documents to store")
+        return None
+
+    existing_urls = get_crawled_urls()
+    new_docs = [d for d in documents if d.metadata.get("source_url") not in existing_urls]
+
+    if not new_docs:
+        print("All URLs already in vector store, skipping")
+        return get_vectorstore()
+
     vectorstore = get_vectorstore()
-    create_or_fetch_collection(vectorstore.client)
-    vectorstore.add_documents(documents)
-    print(f"Stored {len(documents)} chunks into Qdrant")
+    vectorstore.add_documents(new_docs)
+    print(f"Stored {len(new_docs)} new chunks ({len(documents) - len(new_docs)} duplicates skipped)")
     return vectorstore
 
 def search_vectorstore(query: str, filter: dict = None, k: int = 3):

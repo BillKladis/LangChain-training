@@ -2,15 +2,18 @@ from langgraph.graph import StateGraph, END
 from state import AgentState
 from supervisor import supervisor
 from agents import research_agent, rag_agent
+from langchain_core.messages import HumanMessage
 
 def run_research_agent(state):
     result = research_agent.invoke({"messages": state["messages"]})
     return {"messages": result["messages"]}
 
 def run_rag_agent(state):
-    recent_messages = state["messages"][-10:]
-    result = rag_agent.invoke({"messages": recent_messages})
-    return {"messages": result["messages"]}
+    # pass query explicitly so RAG doesn't get confused by conversation history
+    result = rag_agent.invoke({
+        "messages": [HumanMessage(content=state["query"])]
+    })
+    return {"messages": result["messages"], "rag_completed": True}
 
 def route(state):
     return state["next"]
