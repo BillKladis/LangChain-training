@@ -1,4 +1,5 @@
 import asyncio
+import re
 from typing import List, Tuple
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode, PruningContentFilter, DefaultMarkdownGenerator
 from crawl4ai.async_crawler_strategy import AsyncPlaywrightCrawlerStrategy
@@ -8,30 +9,13 @@ from playwright_stealth import Stealth
 
 stealth = Stealth()
 
-# --- Per-domain configs ---
 DOMAIN_CONFIGS = {
-    "blogspot.com": {
-        "threshold": 0.6,
-        "threshold_type": "fixed",
-        "min_chunk_length": 500,
-    },
-    "medium.com": {
-        "threshold": 0.3,
-        "threshold_type": "fixed",
-        "min_chunk_length": 300,
-    },
-    "wikipedia.org": {
-        "threshold": 0.5,
-        "threshold_type": "dynamic",
-        "min_chunk_length": 200,
-    },
+    "blogspot.com": {"threshold": 0.6, "threshold_type": "fixed", "min_chunk_length": 500},
+    "medium.com": {"threshold": 0.3, "threshold_type": "fixed", "min_chunk_length": 300},
+    "wikipedia.org": {"threshold": 0.5, "threshold_type": "dynamic", "min_chunk_length": 200},
 }
 
-DEFAULT_CONFIG = {
-    "threshold": 0.4,
-    "threshold_type": "dynamic",
-    "min_chunk_length": 300,
-}
+DEFAULT_CONFIG = {"threshold": 0.4, "threshold_type": "dynamic", "min_chunk_length": 300}
 
 def get_domain_config(url: str) -> dict:
     for domain, cfg in DOMAIN_CONFIGS.items():
@@ -66,7 +50,6 @@ async def crawl_web(urls: List[str]) -> List[Document]:
 
     async def fetch_and_return(url: str, crawler) -> Tuple:
         async with semaphore:
-            # Resolve config for this specific URL
             cfg = get_domain_config(url)
             print(f"Crawling {url} with config: {cfg}")
 
@@ -112,17 +95,3 @@ async def crawl_web(urls: List[str]) -> List[Document]:
                 print(f"Extracted {len(splits)} chunks from {url}")
 
     return documents
-
-
-def main():
-    urls = [
-        "https://privatedrafting.blogspot.com/2025/08/finding-success-sir-lewis-hamilton.html",
-        #"https://medium.com/@zshariff70/langchain-simple-llm-chains-in-action-bda6950afc71",
-        #"https://en.wikipedia.org/wiki/Formula_One",
-    ]
-    docs = asyncio.run(crawl_web(urls))
-    print(f"\nTotal chunks ready for Vector DB: {len(docs)}")
-    print(docs)
-
-if __name__ == "__main__":
-    main()

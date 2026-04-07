@@ -5,7 +5,7 @@ from langchain_core.messages import HumanMessage
 load_dotenv()
 
 def main():
-    query = "What is Formula One and who is Lewis Hamilton?"
+    query = "What is football, and who are the top 10 best players"
     result = app.invoke({
         "messages": [HumanMessage(content=query)],
         "query": query,

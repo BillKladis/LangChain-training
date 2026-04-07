@@ -8,7 +8,8 @@ def run_research_agent(state):
     return {"messages": result["messages"]}
 
 def run_rag_agent(state):
-    result = rag_agent.invoke({"messages": state["messages"]})
+    recent_messages = state["messages"][-10:]
+    result = rag_agent.invoke({"messages": recent_messages})
     return {"messages": result["messages"]}
 
 def route(state):

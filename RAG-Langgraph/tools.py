@@ -1,8 +1,8 @@
 import asyncio
 from typing import List
 from langchain.tools import tool
-from duckduckgo_search import DDGS
-from Crawl4AI import crawl_web
+from ddgs import DDGS
+from Crawl4AI_scrapper import crawl_web
 from vector_store import store_documents, search_vectorstore
 
 @tool
