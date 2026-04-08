@@ -1,9 +1,30 @@
 import asyncio
+import sys
+import concurrent.futures
 from typing import List
 from langchain.tools import tool
 from ddgs import DDGS
 from Crawl4AI_scrapper import crawl_web
 from vector_store import store_documents, search_vectorstore, get_crawled_urls
+
+def _run_crawl_in_thread(urls):
+    """Run the async crawl in a dedicated thread with a ProactorEventLoop on Windows.
+
+    Streamlit's event loop on Windows is a SelectorEventLoop, which does not
+    support subprocess (needed by Playwright to launch the browser).  Running
+    in a fresh thread lets us install the right policy before creating the loop.
+    """
+    def _worker():
+        if sys.platform == "win32":
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+        return asyncio.run(crawl_web(urls))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        try:
+            return executor.submit(_worker).result(timeout=120)   # 2-min total cap
+        except concurrent.futures.TimeoutError:
+            print("Crawl timed out after 120 s, returning empty result")
+            return []
 
 @tool
 def search_web(query: str) -> List[str]:
@@ -24,7 +45,7 @@ def crawl_and_store(urls: List[str]) -> str:
         return f"All {len(urls)} URLs already in vector store, skipping crawl"
 
     print(f"Skipping {len(urls) - len(new_urls)} already crawled URLs, crawling {len(new_urls)} new ones")
-    docs = asyncio.run(crawl_web(new_urls))
+    docs = _run_crawl_in_thread(new_urls)
     store_documents(docs)
     return f"Crawled and stored {len(docs)} chunks from {len(new_urls)} new URLs ({len(urls) - len(new_urls)} skipped)"
 

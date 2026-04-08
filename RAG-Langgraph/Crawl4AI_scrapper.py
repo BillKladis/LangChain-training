@@ -63,10 +63,18 @@ async def crawl_web(urls: List[str]) -> List[Document]:
                 cache_mode=CacheMode.BYPASS,
                 word_count_threshold=200,
                 markdown_generator=md_generator,
-                exclude_external_links=True
+                exclude_external_links=True,
+                page_timeout=20000,   # 20 s per page load
             )
 
-            content = await crawler.arun(url, config=run_cfg)
+            try:
+                content = await asyncio.wait_for(
+                    crawler.arun(url, config=run_cfg),
+                    timeout=25,        # 25 s hard cap per URL
+                )
+            except asyncio.TimeoutError:
+                print(f"Timeout crawling {url}, skipping")
+                return None
             if not content.success:
                 print(f"Failed {url} with {content.error_message}")
                 return None
@@ -74,7 +82,8 @@ async def crawl_web(urls: List[str]) -> List[Document]:
 
     async with AsyncWebCrawler(crawler_strategy=strategy) as crawler:
         tasks = [fetch_and_return(u, crawler) for u in urls]
-        results = await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = [r for r in results if not isinstance(r, Exception)]
 
         headers_to_split_on = [("#", "Header1"), ("##", "Header2"), ("###", "Header3")]
         splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
